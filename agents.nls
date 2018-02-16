@@ -28,7 +28,7 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
-  show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
+  ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
   ifelse current_stop = -1
   [
@@ -36,30 +36,40 @@ to execute-actions
   ]
   [
     ; drop the passengers at the current stop
-    show bus_passengers
-    foreach bus_passengers
-    [
-     passenger ->
-     show passenger
-     if (item 1 passenger) = current_stop [
-       drop-off-passenger (item 0 passenger)
-      ] 
-    ]
+    drop_passengers
     
     ; Select the next stop
-    set neighbour (item current_stop graph)
-    set next_stop (one-of neighbour)
+    choose_next_stop
 
     ; pickup the passengers at the current stop
-    foreach (get-passengers-at-stop current_stop)
-    [
-      passenger -> 
-      if (item 1 passenger) = next_stop [
-        pick-up-passenger (item 0 passenger)
-      ]  
-    ]
+    pickup_passengers
     
     ;travel to the next bus stop
     travel-to next_stop
   ]
+end
+
+to drop_passengers
+  foreach bus_passengers
+  [
+   passenger ->
+   if (item 1 passenger) = current_stop [
+     drop-off-passenger (item 0 passenger)
+    ] 
+  ]
+end
+
+to pickup_passengers
+  foreach (get-passengers-at-stop current_stop)
+  [
+    passenger -> 
+    if (item 1 passenger) = next_stop [
+      pick-up-passenger (item 0 passenger)
+    ]  
+  ]
+end
+
+to choose_next_stop
+  set neighbour (item current_stop graph)
+  set next_stop (one-of neighbour)
 end
