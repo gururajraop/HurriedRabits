@@ -30,16 +30,36 @@ to execute-actions
   ; You are allowed to use the global variable 'ticks'.
   show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
-  ; set passengers_list  (get-passengers-at-stop current_stop)
-  
   ifelse current_stop = -1
   [
     travel-to next_stop
   ]
   [
+    ; drop the passengers at the current stop
+    show bus_passengers
+    foreach bus_passengers
+    [
+     passenger ->
+     show passenger
+     if (item 1 passenger) = current_stop [
+       drop-off-passenger (item 0 passenger)
+      ] 
+    ]
+    
+    ; Select the next stop
     set neighbour (item current_stop graph)
     set next_stop (one-of neighbour)
 
+    ; pickup the passengers at the current stop
+    foreach (get-passengers-at-stop current_stop)
+    [
+      passenger -> 
+      if (item 1 passenger) = next_stop [
+        pick-up-passenger (item 0 passenger)
+      ]  
+    ]
+    
+    ;travel to the next bus stop
     travel-to next_stop
   ]
 end
