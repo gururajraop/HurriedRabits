@@ -12,7 +12,8 @@ buses-own [
 
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
-
+  passengers_list
+  neighbour
 ]
  
 globals [graph]
@@ -27,4 +28,18 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
+  show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
+  
+  ; set passengers_list  (get-passengers-at-stop current_stop)
+  
+  ifelse current_stop = -1
+  [
+    travel-to next_stop
+  ]
+  [
+    set neighbour (item current_stop graph)
+    set next_stop (one-of neighbour)
+
+    travel-to next_stop
+  ]
 end
