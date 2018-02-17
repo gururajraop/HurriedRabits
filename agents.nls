@@ -69,9 +69,8 @@ end
 to drop_passengers
   foreach bus_passengers
   [
-   passenger ->
-   if (item 1 passenger) = current_stop [
-     drop-off-passenger (item 0 passenger)
+   if (item 1 ?) = current_stop [
+     drop-off-passenger (item 0 ?)
     ] 
   ]
 end
@@ -79,12 +78,13 @@ end
 to pickup_passengers
   foreach (get-passengers-at-stop current_stop)
   [
-    passenger -> 
-    if (member? (item 1 passenger) path) [
-      pick-up-passenger (item 0 passenger)
+
+    if (member? (item 1 ?) path) [
+      pick-up-passenger (item 0 ?)
     ]  
   ]
 end
+
 
 to choose_next_stop
   ifelse path_position < ((length path) - 1) 
