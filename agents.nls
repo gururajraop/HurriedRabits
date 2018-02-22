@@ -11,73 +11,81 @@ buses-own [
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
   ; New local variables for students.
-  ; You can create any new local variable you want. Just declare them here.
-  beliefs
-  desire
-  intention
- 
 
+  ; You can create any new local variable you want. Just declare them here. 
 ]
  
-globals [graph]
-
+globals [
+  graph
+]
 
 to init-buses
   ; Initialize your agents here.
-  ; Beliefs, each bus has own belief which is updated at subsequent bus stops during its tour
-  ; beliefs are stored in form of a list containing information on passenegerID and destination of the passengers waiting at this bus stop
-  set beliefs (get-passengers-at-stop current_stop)
-  show beliefs
-    
+  
+  ; Create an empty list of passengers who have destination other than stops in the current buses path
+  set different_route_passenger_list []
+
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
 end
 
-
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
-  ; execute action to travel to the next bus stop
-  ; pick-up people with destination lying on the bus tour based on the intention
+  ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
-  init-buses
-  update-intentions
-  ;update-beliefs
-  ;update-desire
-
-  
-end
-
-; Update-Desire bring passengers to desired destination as efficiently as possible (quick and at lowest possible cost)
-; if destination of a waiting passenger actually matches the tour of the bus, then the passenger is picked-up
-;to update-desire
-;end
-
-; Update-Beliefs, based on current bus stop of a given bus, we update its beliefs
-;to update-beliefs
-   ; set beliefs (get-passengers-at-stop current_stop)
-    
-;end
-
-; Intention (next bus stop to be traveled to, which passengers will be picked up at the next bus stop)
-; Here some sort of checking between bus line tour and beliefs 
-; Create Fixed Schedule, bus with ID 24 has a specific tour, bus with ID 25 has a specific tour ... etc.
-
-; create list of passenger IDs to be picked up at next bus stop
-
-to update-intentions
-  foreach (beliefs)
+  ifelse current_stop = -1
   [
-    passenger -> show passeneger
+    travel-to next_stop
   ]
-]
+  [
+    ; drop the passengers at the current stop
+    drop_passengers
+    
+    ; Select the next stop
+    choose_next_stop
+
+    ; pickup the passengers at the current stop
+    pickup_passengers
+    
+    ;travel to the next bus stop
+    travel-to next_stop
+  ]
+end
+
+to drop_passengers
+  ; For every passenger currently in the bus
+  foreach bus_passengers
+  [
+   ; Drop the passenger if his/her destination is current bus stop
+   if (item 1 ?) = current_stop [
+     drop-off-passenger (item 0 ?)
+    ]
+  ]
+end
+
+to pickup_passengers
+  
+   ; Pick up the passengers waiting in the current bus stop
+  foreach (get-passengers-at-stop current_stop)
+  [
+  ; Pick up the passengers waiting at the current bus stop
+    pick-up-passenger (item 0 ?)
+  ]
+end
+
+to choose_next_stop
+  
+  ; Get adjacent bus stops 
+  let adjacent_stops  item current_stop graph
+  
+  ; Get amount of passengers waiting at adjacent stops  
+  let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
+
+  ; Get index of bus stop with maximum passengers and set it as next destination
+  set next_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+  
 end
 
 
-    ;set intention fput item 0 passenger intention 
-
-
-
-
-
-
+;Update information at bus-stops
