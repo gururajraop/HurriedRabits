@@ -11,7 +11,8 @@ buses-own [
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
   ; New local variables for students.
-
+  capacity
+  
   ; You can create any new local variable you want. Just declare them here. 
 ]
  
@@ -21,10 +22,11 @@ globals [
 
 to init-buses
   ; Initialize your agents here.
+  ; Bus capacities
+   set capacity bus_type1_capacity
+   set capacity bus_type2_capacity
+   set capacity bus_type3_capacity
   
-  ; Create an empty list of passengers who have destination other than stops in the current buses path
-  set different_route_passenger_list []
-
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
 end
@@ -32,6 +34,13 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
+  
+  if ticks = 9 [add-bus 2]
+  
+  ; add buses around rush hour 07:00
+  if ticks = 300 [add-bus 3]
+  if ticks = 400 [add-bus 3]
+  
   ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
   ifelse current_stop = -1
@@ -51,6 +60,11 @@ to execute-actions
     ;travel to the next bus stop
     travel-to next_stop
   ]
+  
+  ; Sending a message
+  ; send-message bus_id "Hallo"
+  ; show inbox
+   
 end
 
 to drop_passengers
@@ -69,7 +83,11 @@ to pickup_passengers
    ; Pick up the passengers waiting in the current bus stop
   foreach (get-passengers-at-stop current_stop)
   [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
   ; Pick up the passengers waiting at the current bus stop
+  
     pick-up-passenger (item 0 ?)
   ]
 end
@@ -87,5 +105,3 @@ to choose_next_stop
   
 end
 
-
-;Update information at bus-stops
