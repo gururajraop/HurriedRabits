@@ -12,20 +12,34 @@ buses-own [
 
   ; New local variables for students.
   capacity
+  selected_stop
+  
+  ; Communication protocol
+  ask-destination
+  report-destination
+  
+ 
   
   ; You can create any new local variable you want. Just declare them here. 
 ]
  
 globals [
-  graph
+  graph 
 ]
 
 to init-buses
   ; Initialize your agents here.
+  
+   ; Initialize communication protocol 
+  set ask-destination "ask-destination"
+  set report-destination "report-destination"
+  
+  
   ; Bus capacities
-   set capacity bus_type1_capacity
-   set capacity bus_type2_capacity
-   set capacity bus_type3_capacity
+  ; Use different predefined paths for each bus type
+  if bus_type = 1 [set capacity bus_type1_capacity]
+  if bus_type = 2 [set capacity bus_type2_capacity]
+  if bus_type = 3 [set capacity bus_type3_capacity]
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
@@ -34,36 +48,34 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
-  
-  if ticks = 9 [add-bus 2]
-  
-  ; add buses around rush hour 07:00
-  if ticks = 300 [add-bus 3]
-  if ticks = 400 [add-bus 3]
+
   
   ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
   ifelse current_stop = -1
-  [
+  [ 
     travel-to next_stop
   ]
+  
   [
     ; drop the passengers at the current stop
     drop_passengers
     
     ; Select the next stop
     choose_next_stop
-
+    
+    ; Ask other buses about their next destination
+    ask-all 
+    
     ; pickup the passengers at the current stop
     pickup_passengers
     
     ;travel to the next bus stop
-    travel-to next_stop
+    travel-to selected_stop
+    
   ]
-  
-  ; Sending a message
-  ; send-message bus_id "Hallo"
-  ; show inbox
+  ; Check-inbox
+    check-inbox
    
 end
 
@@ -79,7 +91,7 @@ to drop_passengers
 end
 
 to pickup_passengers
-  
+    
    ; Pick up the passengers waiting in the current bus stop
   foreach (get-passengers-at-stop current_stop)
   [
@@ -87,7 +99,6 @@ to pickup_passengers
     if not ((length bus_passengers) < capacity) [ stop ]
     
   ; Pick up the passengers waiting at the current bus stop
-  
     pick-up-passenger (item 0 ?)
   ]
 end
@@ -97,11 +108,41 @@ to choose_next_stop
   ; Get adjacent bus stops 
   let adjacent_stops  item current_stop graph
   
+  ; Ask other buses where there are going
+  
+  ; Wait for response, if headed to same next stop, chose different one
+  
   ; Get amount of passengers waiting at adjacent stops  
   let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
 
-  ; Get index of bus stop with maximum passengers and set it as next destination
-  set next_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+  ; Get index of bus stop with maximum passengers and travel to it as next destination
+  set selected_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+  
+  ; If there is already a bus going to the next stop, then do not travel there
   
 end
 
+to parse_inbox
+  ; Message contains the following information about the bus who sent the message:
+  ; Next stop 
+  
+  ; Number of passengers
+  ; Final destination of the passengers
+
+end
+
+to ask-all 
+  ; Exchange messages about next destination between buses 
+  ask buses [if not (self = myself) [send-message [bus_id] of myself ask-destination]]
+end
+
+to check-inbox
+  foreach inbox[ 
+  let performative item 2 ?
+  let sender item 1 ?
+  if (performative = ask-destination) [send-message sender (word report-destination " " next_stop )]   
+  ]
+  ; remove-item
+  ; Empty the inbox
+  set inbox []
+end
