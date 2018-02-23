@@ -67,6 +67,12 @@ to execute-actions
     ; drop the passengers at the current stop
     drop_passengers
     
+    ; Send a message to bus 25
+    if not (bus_id = 25) [send-message 25 "Hello"]
+    
+    ; Display messages recieved
+    if (length inbox) > 0 [show inbox]
+    
     ; Select the next stop
     choose_next_stop
 
