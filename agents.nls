@@ -11,45 +11,32 @@ buses-own [
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
   ; New local variables for students.
-  ; You can create any new local variable you want. Just declare them here.
   capacity
-  path            ; Path/Route of the bus travel
-  path_position   ; Current bus stop index in the path
-  different_route_passenger_list        ; List of passengers who are going to a destination not covered by the current bus route
+  selected_stop
+  
+  ; Communication protocol
+  ask-destination
+  report-destination
+  
+  ; You can create any new local variable you want. Just declare them here. 
 ]
  
 globals [
   graph
-  picked_passengers
 ]
 
 to init-buses
   ; Initialize your agents here.
   
-  ; Use different predefined paths for each bus type
-  if bus_type = 1
-  [
-    set capacity bus_type1_capacity
-    set path [3 9 8 2 8 6 8 9]
-  ]
-  if bus_type = 2
-  [
-    set capacity bus_type2_capacity
-    set path [3 4 5 10 17 7 13 22 21 20]
-  ]
-  if bus_type = 3
-  [
-    set capacity bus_type3_capacity
-    set path [3 16 11 1 19 23 14 0 15 18 15 12 20 9]
-  ]
+  ; Initialize communication protocol
+  set ask-destination "ask-destination"
+  set report-destination "report-destination"
   
-  ; Set initial position to be central ie bus stop id 3 which is the 0th element in path
-  set path_position 0
+  ; Bus capacities
+  if bus_type = 1 [set capacity bus_type1_capacity]
+  if bus_type = 2 [set capacity bus_type2_capacity]
+  if bus_type = 3 [set capacity bus_type3_capacity]
   
-  ; Create an empty list of passengers who have destination other than stops in the current buses path
-  set different_route_passenger_list []
-  set picked_passengers []
-
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
 end
@@ -57,30 +44,35 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
-  ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
   
   ifelse current_stop = -1
   [
     travel-to next_stop
   ]
+  
   [
     ; drop the passengers at the current stop
     drop_passengers
     
-    ; Send a message to bus 25
-    if not (bus_id = 25) [send-message 25 "Hello"]
-    
-    ; Display messages recieved
-    if (length inbox) > 0 [show inbox]
-    
     ; Select the next stop
     choose_next_stop
-
+    
+    ; Ask other buses about their next destination
+    ask-all
+    
     ; pickup the passengers at the current stop
     pickup_passengers
     
     ;travel to the next bus stop
-    travel-to next_stop
+    travel-to selected_stop
+    
+  ]
+  ; Check-inbox
+  check-inbox
+  
+  ; Add busses if needed
+  if bus_id = 24 [
+    if vote_for_new_bus [add-bus (one-of [1 2 3])]
   ]
 end
 
@@ -93,53 +85,70 @@ to drop_passengers
      drop-off-passenger (item 0 ?)
     ]
   ]
-  
-  ; Drop the passengers in central who have destination in different route
-  ; so that they can pickup the appropriate bus of that route 
-  ;if current_stop = 3
-  ;[
-  ;  foreach different_route_passenger_list
-  ;  [
-  ;    drop-off-passenger ?
-  ;  ]
-  ;]
 end
 
 to pickup_passengers
+  
   ; Pick up the passengers waiting in the current bus stop
   foreach (get-passengers-at-stop current_stop)
   [
     ; If the bus capacity is full don't pickup the passengers 
     if not ((length bus_passengers) < capacity) [ stop ]
     
-    ; If the passenger has destination in the bus travel path, pick them up
-    ifelse (member? (item 1 ?) path) [
-      pick-up-passenger (item 0 ?)
-      set picked_passengers lput (item 0 ?) picked_passengers
-    ]
+    ; Pick up the passengers waiting at the current bus stop
+    let adjacent_stops item selected_stop graph    ; Get adjacent bus stops of next stop
+    if ((item 1 ?) = selected_stop) or (member? (item 1 ?) adjacent_stops)
     [
-      ; Otherwise, pickup the passenger and drop them at central station (bus stop 3)
-      ; so that they can pick up bus that goes to their destination
-      ;if not (current_stop = 3)
-      ;[
-      ;  pick-up-passenger (item 0 ?)
-      ;  set different_route_passenger_list lput (item 0 ?) different_route_passenger_list
-      ;  set picked_passengers lput (item 0 ?) picked_passengers
-      ;]
+      pick-up-passenger (item 0 ?)
     ]
   ]
 end
 
-
 to choose_next_stop
-  ifelse path_position < ((length path) - 1) 
-  [ 
-    ; Set next stop based on the predefined fixed path
-    set path_position (path_position + 1) 
+  
+  ; Get adjacent bus stops
+  let adjacent_stops item current_stop graph
+  
+  ; Ask other buses where there are going
+  
+  ; Wait for response, if headed to same next stop, chose different one
+  
+  ; Get amount of passengers waiting at adjacent stops
+  let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
+
+  ; Get index of bus stop with maximum passengers and travel to it as next destination
+  set selected_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+  
+  ; If there is already a bus going to the next stop, then do not travel there
+  
+end
+
+to parse_inbox
+  ; Message contains the following information about the bus who sent the message:
+  ; Next stop
+  
+  ; Number of passengers
+  ; Final destination of the passengers
+
+end
+
+to ask-all 
+  ; Exchange messages about next destination between buses
+  ask buses [if not (self = myself) [send-message [bus_id] of myself ask-destination]]
+end
+
+to check-inbox
+  foreach inbox[
+  let performative item 2 ?
+  let sender item 1 ?
+  if (performative = ask-destination) [send-message sender (word report-destination " " next_stop )]
   ]
-  [
-    ; loop back to the starting of the path
-    set path_position 0
-  ]
-  set next_stop (item path_position path)
+  ; remove-item
+  ; Empty the inbox
+  set inbox []
+end
+
+to-report vote_for_new_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23])) > 1000 [report true]
+  report false
 end
