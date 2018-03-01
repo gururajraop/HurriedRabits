@@ -50,8 +50,6 @@ to setup
   update-bus-stops
   setup-costs
   add-bus 1
-  add-bus 2
-  add-bus 3
 end
 
 to calculate-average-travelling-time
@@ -247,6 +245,13 @@ to go
       ask buses [
         execute-actions
       ]
+
+
+      if ticks = 9 [add-bus 2]
+
+      ; add buses around rush hour 07:00
+      if ticks = 300 [add-bus 3]
+      if ticks = 400 [add-bus 3]
       add-buses
     ]
   ]
@@ -549,6 +554,7 @@ to update-expenses [new_outcome]
 end
 
 to send-message [to_bus_id message]
+  show (word to_bus_id " " message)
   ifelse is-number? to_bus_id = false or count buses with [bus_id = to_bus_id] <= 0 [
     show (word "WARNING: send-message                  :" "bus does not exist: " to_bus_id)
   ]
@@ -1004,6 +1010,28 @@ MONITOR
 672
 NIL
 final_average_travelling_time
+17
+1
+11
+
+MONITOR
+1218
+150
+1345
+195
+Number of buses
+count buses
+17
+1
+11
+
+MONITOR
+1162
+150
+1219
+195
+Ticks
+ticks
 17
 1
 11
