@@ -48,9 +48,12 @@ end
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
-
   
-  ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
+    if (ticks = 9 and bus_id = 24) [add-bus 2] ;
+
+    ; add buses around rush hour 07:00
+    if (ticks = 300 and bus_id = 24) [add-bus 3]
+    if (ticks = 400 and bus_id = 24) [add-bus 3]
   
   ifelse current_stop = -1
   [ 
