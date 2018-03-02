@@ -11,20 +11,136 @@ buses-own [
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
   ; New local variables for students.
-  ; You can create any new local variable you want. Just declare them here.
-
+  capacity
+  selected_stop
+  
+  
+  ; Communication protocol
+  ask-destination
+  report-destination
+  
+  ; You can create any new local variable you want. Just declare them here. 
 ]
  
-globals [graph]
+globals [
+  graph
+]
 
 to init-buses
   ; Initialize your agents here.
+  ; Bus capacities
+   ; Use different predefined paths for each bus type
+  if bus_type = 1
+  [
+    set capacity bus_type1_capacity
+  ]
+  if bus_type = 2
+  [
+    set capacity bus_type2_capacity
+  ]
+  if bus_type = 3
+  [
+    set capacity bus_type3_capacity
+  ]
 
+  
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  
+  ; Initialize protocol
+  set ask-destination "Where are you going?"
+  set report-destination "I'm going to "
 end
 
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
+  
+  ; show (word "previous stop:" previous_stop ", Current stop:" current_stop ", Next stop:" next_stop)
+  ifelse current_stop = -1
+  [
+    travel-to next_stop
+    ; check inbox and respond to any messages
+  ]
+  [
+    ; drop the passengers at the current stop
+    drop_passengers
+    
+    ; Select the next stop
+    choose_next_stop
+
+    ; pickup the passengers at the current stop
+    pickup_passengers
+    
+    ;travel to the next bus stop
+    travel-to selected_stop
+  ]
+  
+  check-inbox   
 end
+
+to drop_passengers
+  ; For every passenger currently in the bus
+  foreach bus_passengers
+  [
+   ; Drop the passenger if his/her destination is current bus stop
+   if (item 1 ?) = current_stop [
+     drop-off-passenger (item 0 ?)
+    ]
+  ]
+end
+
+to pickup_passengers
+  
+   ; Pick up the passengers waiting in the current bus stop
+  foreach (get-passengers-at-stop current_stop)
+  [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
+  ; Pick up the passengers waiting at the current bus stop
+  
+    pick-up-passenger (item 0 ?)
+
+  ]
+end
+
+to choose_next_stop
+  
+  ; Get adjacent bus stops 
+  let adjacent_stops  item current_stop graph
+  
+  ; ask other buses where they are going
+  ask-all
+  ; wait for a response
+  show inbox
+  ; filter out stops to which other buses are going
+  
+  ; Get amount of passengers waiting at adjacent stops  
+  let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
+
+  ; Get index of bus stop with maximum passengers and set it as next destination
+;  set next_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+   set selected_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+end
+
+to ask-all
+  let other_buses [bus_id] of other buses
+  foreach other_buses [
+    send-message ? ask-destination
+  ]
+end
+
+to check-inbox
+  foreach inbox [
+    let performative item 2 ?
+    let sender item 1 ?
+    if performative = ask-destination [
+      send-message sender (word report-destination next_stop)
+    ]
+  ]
+  set inbox []
+end
+
+
+
