@@ -1,5 +1,4 @@
 buses-own [
-buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
   bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
   bus_type        ; The type of a given agent (bus). 1 means "small", 2 means "medium" and 3 means "large".
@@ -200,13 +199,47 @@ to drop_passengers
   ]
 end
 
-to pickup-passengers  
-   ; Pick up the passengers waiting in the current bus stop
-  foreach (get-passengers-at-stop current_stop)[
+to pickup-passengers
+  ; Pick up the passengers waiting at the current bus stop
+  
+  ; Get list of destinations of passengers inside the bus
+  let destinations []
+  foreach bus_passengers [ set destinations lput (item 1 ?) destinations ]
+  set destinations remove-duplicates destinations
+  
+  ; Priority 1 : Passengers inside the bus
+  if not (length destinations = 0) [
+  foreach (get-passengers-at-stop current_stop)
+  [
     ; If the bus capacity is full don't pickup the passengers 
     if not ((length bus_passengers) < capacity) [ stop ]
     
-    ; Pick up the passengers waiting at the current bus stop  
+    ; Pick up the passengers waiting in the current bus stop whose destination matches with passengers inside the bus
+    if (member? (item 1 ?) destinations)
+    [
+      pick-up-passenger (item 0 ?)
+    ]
+  ] ]
+  
+  ; Priority 2
+  foreach (get-passengers-at-stop current_stop)
+  [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
+    ; Pick up the passengers waiting in the current bus stop whose destination is the next stop of the bus
+    if ((item 1 ?) = selected-stop)
+    [
+      pick-up-passenger (item 0 ?)
+    ]
+  ]
+  
+  ; Priority 3
+  foreach (get-passengers-at-stop current_stop)
+  [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
     pick-up-passenger (item 0 ?)
   ]
 end
