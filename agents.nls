@@ -18,6 +18,11 @@ buses-own [
   unread
   prev-inbox-length
   
+  ; Variables for coordination
+  expected-replies
+  received-replies
+  destination-replies
+  
   ; Communication protocol
   ask-destination
   report-destination
@@ -57,8 +62,8 @@ to init-buses
   
   set selected-stop -1
   ; Initialize communication protocol
-  set ask-destination "Where are you going?"
-  set report-destination "I'm going to "
+  set ask-destination "ask-destination"
+  set report-destination "report-destination"
   
   ; Initialize state strings
   set state-choose-stop "state-choose-stop"
@@ -72,6 +77,9 @@ to init-buses
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
+  set expected-replies 0
+  set received-replies 0
+  set destination-replies []
 end
 
 to execute-actions
@@ -92,7 +100,7 @@ to execute-actions
   ; Step 2: Wait for their replies  
   if state = state-wait-responses [
     ; Step 3: When all buses reply, choose stop and change to state-pickup
-    if all-replied [
+    if expected-replies = received-replies [
       choose-next-stop-by-nearby
       set state state-pickup
     ]
@@ -146,36 +154,33 @@ to choose-next-stop-by-passengers
   ]
 end
 
+; Send messages to other buses
+; asking for their destinations
 to ask-destinations
-  let other_buses [bus_id] of other buses
-  foreach other_buses [
+  let other-buses [bus_id] of other buses
+  foreach other-buses [
     send-message ? ask-destination
   ]
-end
-
-; Report true if the number of messages in inbox replying to
-; the previously sent "ask-destination" message
-; is equal to (number of buses - 1)
-; Otherwise report false
-to-report all-replied
-  ; TODO
-  report false
+  ; Prepare variables to receive replies
+  set expected-replies length other-buses
+  set received-replies 0
+  set destination-replies []
 end
 
 to choose-next-stop-by-nearby  
-  ; Get adjacent bus stops 
-  let adjacent_stops  item current_stop graph
+  ; Get adjacent bus stops and sort by number of passengers waiting
+  let sorted-adjacent-stops sort-by [length get-passengers-at-stop ?1 > length get-passengers-at-stop ?2] (item current_stop graph)
   
   ; filter out stops to which other buses are going
+  foreach sorted-adjacent-stops [
+    if not member? ? destination-replies [
+      set selected-stop ?
+      stop
+    ]
+  ]
   ; If all stops are filtered out, choose the one with
   ; maximum number of passengers waiting
-  ; TODO
-  
-  ; Get amount of passengers waiting at adjacent stops  
-  let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
-
-  ; Get index of bus stop with maximum passengers and set it as next destination
-  set selected-stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
+  set selected-stop item 0 sorted-adjacent-stops
 end
 
 to drop_passengers
@@ -218,21 +223,27 @@ to update-unread
 end
 
 ; Check the unread list for messages that 
-; need to be replied. After replying, remove them
-; from unread list. Messages that do not require
-; reply are left intact in unread.
+; need a reply. After replying, remove them
+; from unread list. Messages that are not
+; answered are left intact in unread.
 to reply-unread
   let not-replied []
   foreach unread [
-    let performative item 2 ?
+    let message item 2 ?
     let sender item 1 ?
-
-    ; Reply to messages asking for destination
-    ifelse performative = ask-destination [
+    
+    ifelse message = ask-destination [
+      ; Reply to messages asking for destination
       send-message sender (word report-destination next_stop)
-    ][
-      set not-replied lput ? not-replied
     ]
+    [ifelse (substring message 0 (length report-destination)) = report-destination [
+        let reported-destination read-from-string (substring message (length report-destination) (length message))
+        set destination-replies lput reported-destination destination-replies
+        set received-replies (received-replies + 1)
+    ]
+    [
+      set not-replied lput ? not-replied
+    ]]
   ]
   set unread not-replied
 end
