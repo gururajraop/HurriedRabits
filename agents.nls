@@ -1,4 +1,5 @@
 buses-own [
+buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
   bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
   bus_type        ; The type of a given agent (bus). 1 means "small", 2 means "medium" and 3 means "large".
@@ -119,6 +120,11 @@ to execute-actions
       set selected-stop -1
       set state state-choose-stop
     ][travel-to selected-stop]
+  ]
+  
+  ; Add busses if needed
+  if bus_id = 24 [
+    if vote_for_new_bus [add-bus (one-of [1 2 3])]
   ]
   
   update-unread
@@ -246,4 +252,9 @@ to reply-unread
     ]]
   ]
   set unread not-replied
+end
+
+to-report vote_for_new_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23])) > 1000 [report true]
+  report false
 end
