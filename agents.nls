@@ -67,7 +67,7 @@ to init-buses
   set state-move "state-move"
   set state-drop "state-drop"
   
-  set state state-choose
+  set state state-choose-stop
 end
 
 to execute-actions
@@ -102,7 +102,7 @@ to execute-actions
   
   ; Keep moving until you get there!
   if state = state-move [
-    ifelse current-stop = selected-stop [
+    ifelse current_stop = selected-stop [
       ; When the bus arrives, reset selected-stop and change to state-choose-stop
       set selected-stop -1
       set state state-choose-stop
@@ -114,8 +114,30 @@ to choose-next-stop-by-passengers
   ; Choose the next stop based on the current passengers
   ; If there are no passengers or
   ; if no passenger is going to an adjacent stop
-  ; no choice can be made with strategy 1 so set selected-stop to -1
-  ; TODO
+  ; no choice can be made with strategy 1 so don't modify selected-stop
+  
+  if length bus_passengers > 0 [
+    ; Get adjacent bus stops 
+    let adjacent-stops  item current_stop graph
+    ; Initialize with 0 number of passengers going to those stops
+    let destination-counts n-values (length adjacent-stops) [0]
+    ; Check the destination of each passenger
+    foreach bus_passengers [
+      ; If going to any of the adjacent stops
+      if member? (item 1 ?) adjacent-stops [
+        ; Find index in adjacent-stops list
+        let stop-idx position (item 1 ?) adjacent-stops
+        ; Get current count and increment by one
+        let stop-count item stop-idx destination-counts
+        set destination-counts replace-item stop-idx destination-counts (stop-count + 1)
+      ]
+      ; Check if there is at least one passenger going to adjacent stop
+      if sum destination-counts > 0 [
+        ; Choose stop by majority
+        set selected-stop item (position (max destination-counts) destination-counts) adjacent-stops
+      ]
+    ]
+  ]
 end
 
 to ask-destinations
@@ -131,6 +153,7 @@ to-report all-replied
   ; is equal to (number of buses - 1)
   ; Otherwise report false
   ; TODO
+  report false
 end
 
 to choose-next-stop-by-nearby  
@@ -146,7 +169,6 @@ to choose-next-stop-by-nearby
   let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
 
   ; Get index of bus stop with maximum passengers and set it as next destination
-  ; set next_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
   set selected-stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
 end
 
