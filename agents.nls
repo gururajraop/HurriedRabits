@@ -114,6 +114,7 @@ to execute-actions
   ]
   
   update-unread
+  reply-unread
 end
 
 to choose-next-stop-by-passengers
@@ -201,16 +202,26 @@ to pickup-passengers
 end
 
 to update-unread
-  
+  if length inbox > prev-inbox-length [
+    let i prev-inbox-length
+    while [i < length inbox] [
+      set unread lput (item i inbox) unread
+      set i (i + 1)
+    ]
+    set prev-inbox-length length inbox
+  ]
 end
 
-to check-inbox
-  foreach inbox [
+to reply-unread
+  let not-replied []
+  foreach unread [
     let performative item 2 ?
     let sender item 1 ?
-    if performative = ask-destination [
+    ifelse performative = ask-destination [
       send-message sender (word report-destination next_stop)
+    ][
+      set not-replied lput ? not-replied
     ]
   ]
-  set inbox []
+  set unread not-replied
 end
