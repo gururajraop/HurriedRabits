@@ -10,10 +10,13 @@ buses-own [
   current_stop    ; ID of the bus stop where the agent (bus) currently is (-1 means that the agent is not at any bus stop).
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
-  ; New local variables for students.
+  ; --- New local variables for students ---
+  ; Bus variables
   capacity
   selected-stop
   state
+  unread
+  prev-inbox-length
   
   ; Communication protocol
   ask-destination
@@ -26,8 +29,6 @@ buses-own [
   state-pickup
   state-move
   state-drop
-  
-  ; You can create any new local variable you want. Just declare them here. 
 ]
  
 globals [
@@ -66,8 +67,11 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
-  
+  ; Initial state
   set state state-choose-stop
+  ; Initialize unread messages
+  set unread []
+  set prev-inbox-length 0
 end
 
 to execute-actions
@@ -108,6 +112,8 @@ to execute-actions
       set state state-choose-stop
     ][travel-to selected-stop]
   ]
+  
+  update-unread
 end
 
 to choose-next-stop-by-passengers
@@ -192,6 +198,10 @@ to pickup-passengers
     ; Pick up the passengers waiting at the current bus stop  
     pick-up-passenger (item 0 ?)
   ]
+end
+
+to update-unread
+  
 end
 
 to check-inbox
