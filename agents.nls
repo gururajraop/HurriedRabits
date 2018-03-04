@@ -117,12 +117,11 @@ to execute-actions
   reply-unread
 end
 
+; Choose the next stop based on the current passengers
+; If there are no passengers or
+; if no passenger is going to an adjacent stop
+; no choice can be made with strategy 1 so don't modify selected-stop
 to choose-next-stop-by-passengers
-  ; Choose the next stop based on the current passengers
-  ; If there are no passengers or
-  ; if no passenger is going to an adjacent stop
-  ; no choice can be made with strategy 1 so don't modify selected-stop
-  
   if length bus_passengers > 0 [
     ; Get adjacent bus stops 
     let adjacent-stops  item current_stop graph
@@ -154,11 +153,11 @@ to ask-destinations
   ]
 end
 
+; Report true if the number of messages in inbox replying to
+; the previously sent "ask-destination" message
+; is equal to (number of buses - 1)
+; Otherwise report false
 to-report all-replied
-  ; Report true if the number of messages in inbox replying to
-  ; the previously sent "ask-destination" message
-  ; is equal to (number of buses - 1)
-  ; Otherwise report false
   ; TODO
   report false
 end
@@ -201,22 +200,34 @@ to pickup-passengers
   ]
 end
 
+; Check if the size of the inbox has changed.
+; If so, update the unread list.
 to update-unread
+  ; Compare current length of inbox to its
+  ; length in the previous tick
   if length inbox > prev-inbox-length [
+    ; If length increased, add new messages to the unread list
     let i prev-inbox-length
     while [i < length inbox] [
       set unread lput (item i inbox) unread
       set i (i + 1)
     ]
+    ; Update length of inbox in previous tick
     set prev-inbox-length length inbox
   ]
 end
 
+; Check the unread list for messages that 
+; need to be replied. After replying, remove them
+; from unread list. Messages that do not require
+; reply are left intact in unread.
 to reply-unread
   let not-replied []
   foreach unread [
     let performative item 2 ?
     let sender item 1 ?
+
+    ; Reply to messages asking for destination
     ifelse performative = ask-destination [
       send-message sender (word report-destination next_stop)
     ][
