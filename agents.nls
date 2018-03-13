@@ -314,6 +314,8 @@ to reply-unread
 end
 
 to-report vote_for_new_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23])) > 200 [report true]
+  let ppb 1000
+  if (count turtles with [who > 23]) > 10 [set ppb 5000] 
+  if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [report true]
   report false
 end
