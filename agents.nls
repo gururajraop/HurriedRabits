@@ -1,3 +1,5 @@
+extensions [matrix nw]
+
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
   bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
@@ -22,6 +24,10 @@ buses-own [
   expected-replies
   received-replies
   destination-replies
+  
+  ; Variables for shrtest path
+  strategy
+  shortest_path
   
   ; Communication protocol
   ask-destination
@@ -65,6 +71,9 @@ to init-buses
   set ask-destination "ask-destination"
   set report-destination "report-destination"
   
+  set strategy "random"
+  set shortest_path []
+  
   ; Initialize state strings
   set state-choose-stop "state-choose-stop"
   set state-ask-destinations "state-ask-destinations"
@@ -84,10 +93,17 @@ end
 
 to execute-actions
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
-  if state = state-choose-stop [    
-    choose-next-stop-by-passengers
-    ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
-    ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
+  if state = state-choose-stop [
+    ifelse strategy = "random" and (length bus_passengers) < (capacity / 2) [
+      choose-next-stop-by-passengers
+      ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
+      ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
+    ]
+    [
+      if strategy = "random" [ set strategy "shortest_path" ]
+      choose-next-stop-by-shortest-path
+      set state state-pickup
+    ]
   ]
   
   ; Next-stop strategy 2: choose adjacent stop with maximum passengers waiting
@@ -162,6 +178,28 @@ to choose-next-stop-by-passengers
         set selected-stop item (position (max destination-counts) destination-counts) adjacent-stops
       ]
     ]
+  ]
+end
+
+to choose-next-stop-by-shortest-path
+  ifelse length shortest_path = 0 [
+    let current_passengers matrix:from-column-list bus_passengers
+    show current_passengers
+    let destinations modes (matrix:get-row current_passengers 1)
+    show destinations
+    let destination item 0 destinations
+    show current_stop
+    show destination
+    set shortest_path get-shortest-path current_stop destination
+    set selected-stop (item 1 shortest_path)
+  ]
+  [
+    set selected-stop item ((position current_stop shortest_path) + 1) shortest_path
+  ]
+  
+  if (position selected-stop shortest_path) = (length shortest_path - 1) [
+    set strategy "random"
+    set shortest_path []
   ]
 end
 
@@ -318,4 +356,23 @@ to-report vote_for_new_bus
   if (count turtles with [who > 23]) > 10 [set ppb 5000] 
   if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [report true]
   report false
+end
+
+to-report get-shortest-path [source destination]
+  let path []
+  ask bus_stop source [ set path (nw:path-to bus_stop destination) ]
+  let shortest_route []
+  set shortest_route lput source shortest_route
+  
+  let current_source source
+  let stops []
+  foreach path [
+    ask ? [ ask both-ends [ set stops lput who stops ] ]
+    foreach stops [
+      if not (member? ? shortest_route) [ set shortest_route lput ? shortest_route ]
+    ]
+    set stops []
+  ]
+  
+  report shortest_route
 end
