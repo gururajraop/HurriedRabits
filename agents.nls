@@ -10,15 +10,30 @@ buses-own [
   current_stop    ; ID of the bus stop where the agent (bus) currently is (-1 means that the agent is not at any bus stop).
   next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
 
-  ; New local variables for students.
+  ; --- New local variables for students ---
+  ; Bus variables
   capacity
-  selected_stop
+  selected-stop
+  state
+  unread
+  prev-inbox-length
+  
+  ; Variables for coordination
+  expected-replies
+  received-replies
+  destination-replies
   
   ; Communication protocol
   ask-destination
   report-destination
   
-  ; You can create any new local variable you want. Just declare them here. 
+  ; State variables
+  state-choose-stop
+  state-ask-destinations
+  state-wait-responses
+  state-pickup
+  state-move
+  state-drop
 ]
  
 globals [
@@ -27,56 +42,180 @@ globals [
 
 to init-buses
   ; Initialize your agents here.
+  ; Bus capacities
+   ; Use different predefined paths for each bus type
+  if bus_type = 1
+  [
+    set capacity bus_type1_capacity
+  ]
+  if bus_type = 2
+  [
+    set capacity bus_type2_capacity
+  ]
+  if bus_type = 3
+  [
+    set capacity bus_type3_capacity
+  ]
   
+  ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
+  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  
+  set selected-stop -1
   ; Initialize communication protocol
   set ask-destination "ask-destination"
   set report-destination "report-destination"
   
-  ; Bus capacities
-  if bus_type = 1 [set capacity bus_type1_capacity]
-  if bus_type = 2 [set capacity bus_type2_capacity]
-  if bus_type = 3 [set capacity bus_type3_capacity]
-  
-  ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
-  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  ; Initialize state strings
+  set state-choose-stop "state-choose-stop"
+  set state-ask-destinations "state-ask-destinations"
+  set state-wait-responses "state-wait-responses"
+  set state-pickup "state-pickup"
+  set state-move "state-move"
+  set state-drop "state-drop"
+  ; Initial state
+  set state state-choose-stop
+  ; Initialize unread messages
+  set unread []
+  set prev-inbox-length 0
+  set expected-replies 0
+  set received-replies 0
+  set destination-replies []
 end
 
 to execute-actions
-  ; Add decision making strategies for your agents here.
-  ; You are allowed to use the global variable 'ticks'.
-  
-  ifelse current_stop = -1
-  [
-    travel-to next_stop
+  ; Next-stop strategy 1: attempt to choose stop based on current passengers
+  if state = state-choose-stop [    
+    choose-next-stop-by-passengers
+    ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
+    ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
   ]
   
-  [
-    ; drop the passengers at the current stop
-    drop_passengers
-    
-    ; Select the next stop
-    choose_next_stop
-    
-    ; Ask other buses about their next destination
-    ask-all
-    
-    ; pickup the passengers at the current stop
-    pickup_passengers
-    
-    ;travel to the next bus stop
-    travel-to selected_stop
-    
+  ; Next-stop strategy 2: choose adjacent stop with maximum passengers waiting
+  ; that has not already been chosen by other buses (what if all have been chosen?) <--------
+  ; Step 1: Ask other buses for their destinations
+  if state = state-ask-destinations [
+    ask-destinations
+    set state state-wait-responses
   ]
-  ; Check-inbox
-  check-inbox
+  ; Step 2: Wait for their replies  
+  if state = state-wait-responses [
+    ; Step 3: When all buses reply, choose stop and change to state-pickup
+    if expected-replies = received-replies [
+      choose-next-stop-by-nearby
+      set state state-pickup
+    ]
+  ]
+  
+  ; Once a stop has been chosen, pick up passengers
+  if state = state-pickup [
+    pickup-passengers
+    set state state-move
+  ]
+  
+  ; Keep moving bus until it arrives to destination
+  if state = state-move [
+    ifelse current_stop = selected-stop [
+      ; When the bus arrives, reset selected-stop and change to state-drop
+      set selected-stop -1
+      set state state-drop
+    ][travel-to selected-stop]
+  ]
+  
+  ; At destination, drop off passengers and change to state-choose-stop
+  if state = state-drop [
+    drop-passengers
+    set state state-choose-stop
+  ]
   
   ; Add busses if needed
   if bus_id = 24 [
     if vote_for_new_bus [add-bus (one-of [1 2 3])]
   ]
+  
+  update-unread
+  reply-unread
 end
 
-to drop_passengers
+; Choose the next stop based on the current passengers
+; If there are no passengers or
+; if no passenger is going to an adjacent stop
+; no choice can be made with strategy 1 so don't modify selected-stop
+to choose-next-stop-by-passengers
+  if length bus_passengers > 0 [
+    ; Get adjacent bus stops 
+    let adjacent-stops  item current_stop graph
+    ; Initialize with 0 number of passengers going to those stops
+    let destination-counts n-values (length adjacent-stops) [0]
+    ; Check the destination of each passenger
+    foreach bus_passengers [
+      ; If going to any of the adjacent stops
+      if member? (item 1 ?) adjacent-stops [
+        ; Find index in adjacent-stops list
+        let stop-idx position (item 1 ?) adjacent-stops
+        ; Get current count and increment by one
+        let stop-count item stop-idx destination-counts
+        set destination-counts replace-item stop-idx destination-counts (stop-count + 1)
+      ]
+      ; Check if there is at least one passenger going to adjacent stop
+      if sum destination-counts > 0 [
+        ; Choose stop by majority
+        set selected-stop item (position (max destination-counts) destination-counts) adjacent-stops
+      ]
+    ]
+  ]
+end
+
+; Send messages to other buses
+; asking for their destinations
+to ask-destinations
+  let other-buses [bus_id] of other buses
+  foreach other-buses [
+    send-message ? ask-destination
+  ]
+  ; Prepare variables to receive replies
+  set expected-replies length other-buses
+  set received-replies 0
+  set destination-replies []
+end
+
+to choose-next-stop-by-nearby  
+  ; Get adjacent bus stops and sort by number of passengers waiting
+  let sorted-adjacent-stops sort-by [length get-passengers-at-stop ?1 > length get-passengers-at-stop ?2] (item current_stop graph)
+  ; Remove stops to which other buses are going
+  let options []  
+  foreach sorted-adjacent-stops [
+    if not member? ? destination-replies [
+      set options lput ? options
+    ]
+  ]
+  ; If there are no options,
+  ; choose the one with the most number of passengers and return
+  if length options = 0 [
+    ;set selected-stop item 0 sorted-adjacent-stops
+    ;stop
+    set options sorted-adjacent-stops
+  ]
+    ; Otherwise select randomly with probability proportional to number of passengers
+    ; Smoothed list of passengers waiting
+    let stops-weights map [(length ?) + 1] map get-passengers-at-stop options
+    ; Cumulative sum
+    let cum-sum butfirst reduce [lput (?2 + last ?1) ?1] fput [0] stops-weights
+    ; Choose index from uniform distribution
+    let choice-value random-float max cum-sum
+    ; Get corresponding stop
+    let selection-results map [? > choice-value] cum-sum
+    set selected-stop item (position true selection-results) options
+    
+    ;show options
+    ;show stops-weights
+    ;show cum-sum
+    ;show choice-value
+    ;show selection-results
+    ;show selected-stop
+  
+end
+
+to drop-passengers
   ; For every passenger currently in the bus
   foreach bus_passengers
   [
@@ -87,68 +226,94 @@ to drop_passengers
   ]
 end
 
-to pickup_passengers
+to pickup-passengers
+  ; Pick up the passengers waiting at the current bus stop
   
-  ; Pick up the passengers waiting in the current bus stop
+  ; Get list of destinations of passengers inside the bus
+  let destinations []
+  foreach bus_passengers [ set destinations lput (item 1 ?) destinations ]
+  set destinations remove-duplicates destinations
+  
+  ; Priority 1 : Passengers inside the bus
+  if not (length destinations = 0) [
+    foreach (get-passengers-at-stop current_stop)[
+      ; If the bus capacity is full don't pickup the passengers 
+      if not ((length bus_passengers) < capacity) [ stop ]
+      
+      ; Pick up the passengers waiting in the current bus stop whose destination matches with passengers inside the bus
+      if (member? (item 1 ?) destinations)[
+        pick-up-passenger (item 0 ?)
+      ]
+    ]
+  ]
+  
+  ; Priority 2
   foreach (get-passengers-at-stop current_stop)
   [
     ; If the bus capacity is full don't pickup the passengers 
     if not ((length bus_passengers) < capacity) [ stop ]
     
-    ; Pick up the passengers waiting at the current bus stop
-    let adjacent_stops item selected_stop graph    ; Get adjacent bus stops of next stop
-    if ((item 1 ?) = selected_stop) or (member? (item 1 ?) adjacent_stops)
+    ; Pick up the passengers waiting in the current bus stop whose destination is the next stop of the bus
+    if ((item 1 ?) = selected-stop)
     [
       pick-up-passenger (item 0 ?)
     ]
   ]
-end
-
-to choose_next_stop
   
-  ; Get adjacent bus stops
-  let adjacent_stops item current_stop graph
-  
-  ; Ask other buses where there are going
-  
-  ; Wait for response, if headed to same next stop, chose different one
-  
-  ; Get amount of passengers waiting at adjacent stops
-  let nr_waiting_pass map length map get-passengers-at-stop adjacent_stops
-
-  ; Get index of bus stop with maximum passengers and travel to it as next destination
-  set selected_stop item position max nr_waiting_pass nr_waiting_pass adjacent_stops
-  
-  ; If there is already a bus going to the next stop, then do not travel there
-  
-end
-
-to parse_inbox
-  ; Message contains the following information about the bus who sent the message:
-  ; Next stop
-  
-  ; Number of passengers
-  ; Final destination of the passengers
-
-end
-
-to ask-all 
-  ; Exchange messages about next destination between buses
-  ask buses [if not (self = myself) [send-message [bus_id] of myself ask-destination]]
-end
-
-to check-inbox
-  foreach inbox[
-  let performative item 2 ?
-  let sender item 1 ?
-  if (performative = ask-destination) [send-message sender (word report-destination " " next_stop )]
+  ; Priority 3
+  foreach (get-passengers-at-stop current_stop)
+  [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
+    pick-up-passenger (item 0 ?)
   ]
-  ; remove-item
-  ; Empty the inbox
-  set inbox []
+end
+
+; Check if the size of the inbox has changed.
+; If so, update the unread list.
+to update-unread
+  ; Compare current length of inbox to its
+  ; length in the previous tick
+  if length inbox > prev-inbox-length [
+    ; If length increased, add new messages to the unread list
+    let i prev-inbox-length
+    while [i < length inbox] [
+      set unread lput (item i inbox) unread
+      set i (i + 1)
+    ]
+    ; Update length of inbox in previous tick
+    set prev-inbox-length length inbox
+  ]
+end
+
+; Check the unread list for messages that 
+; need a reply. After replying, remove them
+; from unread list. Messages that are not
+; answered are left intact in unread.
+to reply-unread
+  let not-replied []
+  foreach unread [
+    let message item 2 ?
+    let sender item 1 ?
+    
+    ifelse message = ask-destination [
+      ; Reply to messages asking for destination
+      send-message sender (word report-destination next_stop)
+    ]
+    [ifelse (substring message 0 (length report-destination)) = report-destination [
+        let reported-destination read-from-string (substring message (length report-destination) (length message))
+        set destination-replies lput reported-destination destination-replies
+        set received-replies (received-replies + 1)
+    ]
+    [
+      set not-replied lput ? not-replied
+    ]]
+  ]
+  set unread not-replied
 end
 
 to-report vote_for_new_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23])) > 1000 [report true]
+  if (amount_passengers_waiting / (count turtles with [who > 23])) > 200 [report true]
   report false
 end
