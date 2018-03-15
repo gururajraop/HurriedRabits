@@ -19,6 +19,7 @@ buses-own [
   state
   unread
   prev-inbox-length
+  all-bus-stops
   
   ; Variables for coordination
   expected-replies
@@ -40,6 +41,7 @@ buses-own [
   state-pickup
   state-move
   state-drop
+  state-new-bus
 ]
  
 globals [
@@ -65,6 +67,7 @@ to init-buses
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  set all-bus-stops reverse n-values length amsterdam_bus_stops_names [23 - ?]
   
   set selected-stop -1
   ; Initialize communication protocol
@@ -81,8 +84,11 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
+  set state-new-bus "state-new-bus"
   ; Initial state
-  set state state-choose-stop
+  ;set state state-choose-stop
+  set state state-new-bus
+  
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
@@ -143,10 +149,18 @@ to execute-actions
     set state state-choose-stop
   ]
   
+   ; If bus is new in the system, send it to bus stop with maximum amount of passengers waiting
+  if state = state-new-bus[
+    init-operating
+    set state state-move
+  ]
+  
+  
   ; Add busses if needed
   if bus_id = 24 [
-    if vote_for_new_bus [add-bus (one-of [1 2 3])]
+    if vote_for_new_bus [add-bus 1];(one-of [1 2 3])]
   ]
+  
   
   update-unread
   reply-unread
@@ -183,23 +197,31 @@ end
 
 to choose-next-stop-by-shortest-path
   ifelse length shortest_path = 0 [
+    ; Construct shortest path
     let current_passengers matrix:from-column-list bus_passengers
-    show current_passengers
+
     let destinations modes (matrix:get-row current_passengers 1)
-    show destinations
-    let destination item 0 destinations
-    show current_stop
-    show destination
+
+    ;let destination item 0 destinations
+    let destination item 0 map [item 1 ?] bus_passengers
+
     set shortest_path get-shortest-path current_stop destination
     set selected-stop (item 1 shortest_path)
   ]
   [
+    ; Move to next stop in shortes path
+
     set selected-stop item ((position current_stop shortest_path) + 1) shortest_path
+    
+    
+    
   ]
   
-  if (position selected-stop shortest_path) = (length shortest_path - 1) [
-    set strategy "random"
+  if (position selected-stop shortest_path) = (length shortest_path - 1) [    
     set shortest_path []
+    if (length bus_passengers) < (capacity / 2) [
+      set strategy "random"
+    ]
   ]
 end
 
@@ -219,18 +241,6 @@ end
 to choose-next-stop-by-nearby  
   ; Get adjacent bus stops and sort by number of passengers waiting
   let sorted-adjacent-stops sort-by [length get-passengers-at-stop ?1 > length get-passengers-at-stop ?2] (item current_stop graph)
-  ; Remove stops to which other buses are going
- ; let options []  
- ; foreach sorted-adjacent-stops [
-  ;  if not member? ? destination-replies [
-   ;   set options lput ? options
-    ;]
-  ;]
-  ; If there are no options,
-  ; choose the one with the most number of passengers and return
-  ;if length options = 0 [
-    ;set selected-stop item 0 sorted-adjacent-stops
-    ;stop
     let options sorted-adjacent-stops
   ;]
     ; Otherwise select randomly with probability proportional to number of passengers
@@ -352,8 +362,8 @@ to reply-unread
 end
 
 to-report vote_for_new_bus
-  let ppb 1000
-  if (count turtles with [who > 23]) > 10 [set ppb 5000] 
+  let ppb 50
+  ;if (count turtles with [who > 23]) > 10 [set ppb 5000] 
   if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [report true]
   report false
 end
@@ -376,3 +386,23 @@ to-report get-shortest-path [source destination]
   
   report shortest_route
 end
+
+
+to init-operating
+  if (length bus_passengers = 0)[
+
+    ; Look for the bus stop with maximum amount of passengers waiting
+    let pass-waiting-all-stops map length map get-passengers-at-stop all-bus-stops
+    ; Get position with max amount of pass waiting
+    let max_pos position max pass-waiting-all-stops pass-waiting-all-stops
+
+    ; Set shortest paths to that stop
+    set strategy "shortest_path"
+    set shortest_path get-shortest-path current_stop max_pos    
+    set selected-stop (item 1 shortest_path)
+    
+  ]
+  
+  
+end
+
