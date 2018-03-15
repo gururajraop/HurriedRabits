@@ -17,13 +17,17 @@ buses-own [
   capacity
   selected-stop
   state
+  vote
   unread
   prev-inbox-length
   
   ; Variables for coordination
   expected-replies
   received-replies
+  expected-votes
+  received-votes
   destination-replies
+  passenger-count-replies
   
   ; Variables for shrtest path
   strategy
@@ -32,6 +36,8 @@ buses-own [
   ; Communication protocol
   ask-destination
   report-destination
+  ask-passenger-count
+  report-passenger-count
   
   ; State variables
   state-choose-stop
@@ -40,6 +46,9 @@ buses-own [
   state-pickup
   state-move
   state-drop
+  vote-add-bus
+  vote-wait-response
+  vote-no-vote
 ]
  
 globals [
@@ -70,6 +79,8 @@ to init-buses
   ; Initialize communication protocol
   set ask-destination "ask-destination"
   set report-destination "report-destination"
+  set ask-passenger-count "ask-passenger-count"
+  set report-passenger-count "report-passenger-count"
   
   set strategy "random"
   set shortest_path []
@@ -81,20 +92,27 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
+  set vote-add-bus "vote-add-bus"
+  set vote-wait-response "vote-wait-response"
+  set vote-no-vote "no-vote"
   ; Initial state
   set state state-choose-stop
+  set vote vote-no-vote
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
   set expected-replies 0
   set received-replies 0
+  set expected-votes 0
+  set received-votes 0
   set destination-replies []
+  set passenger-count-replies []
 end
 
 to execute-actions
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
   if state = state-choose-stop [
-    ifelse strategy = "random" and (length bus_passengers) < (capacity / 2) [
+    ifelse strategy = "random" and (length bus_passengers) < (0.9 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
@@ -103,6 +121,9 @@ to execute-actions
       if strategy = "random" [ set strategy "shortest_path" ]
       choose-next-stop-by-shortest-path
       set state state-pickup
+      ;choose-next-stop-by-passengers
+      ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
+      ;ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
     ]
   ]
   
@@ -145,7 +166,8 @@ to execute-actions
   
   ; Add busses if needed
   if bus_id = 24 [
-    if vote_for_new_bus [add-bus (one-of [1 2 3])]
+    let add-new-bus vote_for_new_bus
+    if not (add-new-bus = -1) [ add-bus add-new-bus ]
   ]
   
   update-unread
@@ -184,12 +206,8 @@ end
 to choose-next-stop-by-shortest-path
   ifelse length shortest_path = 0 [
     let current_passengers matrix:from-column-list bus_passengers
-    show current_passengers
     let destinations modes (matrix:get-row current_passengers 1)
-    show destinations
     let destination item 0 destinations
-    show current_stop
-    show destination
     set shortest_path get-shortest-path current_stop destination
     set selected-stop (item 1 shortest_path)
   ]
@@ -214,6 +232,17 @@ to ask-destinations
   set expected-replies length other-buses
   set received-replies 0
   set destination-replies []
+end
+
+to ask-passenger-counts
+  let other-buses [bus_id] of other buses
+  foreach other-buses [
+    send-message ? ask-passenger-count
+  ]
+  ; Prepare variables to receive replies
+  set expected-votes length other-buses
+  set received-votes 0
+  set passenger-count-replies []
 end
 
 to choose-next-stop-by-nearby  
@@ -334,28 +363,74 @@ to reply-unread
   foreach unread [
     let message item 2 ?
     let sender item 1 ?
+    let replied "No"
     
-    ifelse message = ask-destination [
+    if message = ask-destination [
       ; Reply to messages asking for destination
       send-message sender (word report-destination next_stop)
+      set replied "Yes"
     ]
-    [ifelse (substring message 0 (length report-destination)) = report-destination [
-        let reported-destination read-from-string (substring message (length report-destination) (length message))
-        set destination-replies lput reported-destination destination-replies
-        set received-replies (received-replies + 1)
+    if message = ask-passenger-count [
+      ; Reply to messages asking for passenger count inside the bus
+      let add-bus-fact 0
+      if not (current_stop = -1) and (length get-passengers-at-stop current_stop) > 0[
+        set add-bus-fact (amount_passengers_waiting / (length get-passengers-at-stop current_stop))
+      ]
+      set add-bus-fact (add-bus-fact + (length bus_passengers / capacity))
+      set add-bus-fact (add-bus-fact / 2)
+      
+      let new-bus 1
+      if add-bus-fact > 0.3 [ set new-bus 2 ]
+      if add-bus-fact > 0.6 [ set new-bus 3 ]
+      
+      send-message sender (word report-passenger-count new-bus)
+      set replied "Yes"
     ]
+    if not (message = ask-destination) and not (message = ask-passenger-count) [
+    ifelse (substring message 0 (length report-destination)) = report-destination [
+      let reported-destination read-from-string (substring message (length report-destination) (length message))
+      set destination-replies lput reported-destination destination-replies
+      set received-replies (received-replies + 1)
+      set replied "Yes"
+    ]
+    ;if (substring message 0 (length report-passenger-count)) = report-passenger-count [
     [
-      set not-replied lput ? not-replied
+      let reported-passenger-count read-from-string (substring message (length report-passenger-count) (length message))
+      set passenger-count-replies lput reported-passenger-count passenger-count-replies
+      set received-votes (received-votes + 1)
+      set replied "Yes"
     ]]
+    if replied = "No" [
+      set not-replied lput ? not-replied
+    ]
   ]
   set unread not-replied
 end
 
 to-report vote_for_new_bus
-  let ppb 1000
-  if (count turtles with [who > 23]) > 10 [set ppb 5000] 
-  if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [report true]
-  report false
+  if (count turtles with [who > 23]) = 1 [report 2]
+  if (count turtles with [who > 23]) = 2 [report 3]
+
+  if vote = vote-no-vote [     
+    let ppb 100
+    if (count turtles with [who > 23]) > 10 [set ppb 250]
+    if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [ set vote vote-add-bus ]
+  ]
+  
+  if vote = vote-add-bus [
+    ask-passenger-counts
+    set vote vote-wait-response
+  ]
+  if vote = vote-wait-response [
+    if expected-votes = received-votes [
+      let new-bus (item 0 modes passenger-count-replies)
+      set passenger-count-replies []
+      set vote vote-no-vote
+      report new-bus
+    ]
+  ]
+  report -1
+  
 end
 
 to-report get-shortest-path [source destination]
