@@ -100,15 +100,22 @@ end
 to execute-actions
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
   if state = state-choose-stop [
+    
+    
     ifelse strategy = "random" and (length bus_passengers) < (capacity / 2) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       ifelse selected-stop = -1 [set state state-wait-responses][set state state-pickup]
     ]
     [
-      if strategy = "random" [ set strategy "shortest_path" ]
-      choose-next-stop-by-shortest-path
+      ifelse (length bus_passengers) > 0 [         
+      if strategy = "random" [ set strategy "shortest_path" ]      
+      choose-next-stop-by-shortest-path      
       set state state-pickup
+      ]
+      [
+        set strategy "random"
+      ]
     ]
   ]
   
