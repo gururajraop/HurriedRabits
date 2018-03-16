@@ -187,17 +187,29 @@ to execute-actions
   reply-unread
 end
 
-to init-operating
-  ; Look for the bus stop with maximum amount of passengers waiting
-  let pass-waiting-all-stops map length map get-passengers-at-stop all-bus-stops
-  ; Get position with max amount of pass waiting
-  let max_pos position max pass-waiting-all-stops pass-waiting-all-stops
 
+to init-operating
+  ; Smoothed list of passengers waiting
+  let stops-weights map [(length ?) + 1] map get-passengers-at-stop all-bus-stops
+  ; Cumulative sum
+  let cum-sum butfirst reduce [lput (?2 + last ?1) ?1] fput [0] stops-weights
+  ; Choose index from uniform distribution
+  let choice-value random-float max cum-sum
+  ; Get corresponding stop
+  let selection-results map [? > choice-value] cum-sum
+  let selected-destination item (position true selection-results) all-bus-stops
+  
+  ifelse[ member? selected-destination item current_stop graph [set selected-stop selected-destination set strategy "random"]
+  ]
+  [
   ; Set shortest paths to that stop
   set strategy "shortest_path"
-  set shortest_path get-shortest-path current_stop max_pos    
+  set shortest_path get-shortest-path current_stop selected-destination    
   set selected-stop (item 1 shortest_path)
+  ]
 end
+
+
 
 ; Choose the next stop based on the current passengers
 ; If there are no passengers or
@@ -477,7 +489,7 @@ to-report vote_for_new_bus
   if (count turtles with [who > 23]) = 2 [report 3]
 
   if vote = vote-no-vote [     
-    let ppb 100
+    let ppb 50
     if (count turtles with [who > 23]) > 10 [set ppb 250]
     if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [ set vote vote-add-bus ]
   ]
