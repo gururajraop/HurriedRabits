@@ -145,7 +145,8 @@ to execute-actions
   
   ; Once a stop has been chosen, pick up passengers
   if state = state-pickup [
-    pickup-passengers
+    ifelse strategy = "random" [ pickup-passengers-random ]
+    [ pickup-passengers-shortest-path ]
     set state state-move
   ]
   
@@ -293,7 +294,41 @@ to drop-passengers
   ]
 end
 
-to pickup-passengers
+to pickup-passengers-shortest-path
+  ; Priority 1: Passengers with destination in shortest path
+  if not (length shortest_path = 0) [
+    foreach (get-passengers-at-stop current_stop)[
+      ; If the bus capacity is full don't pickup the passengers 
+      if not ((length bus_passengers) < capacity) [ stop ]
+      
+      ; Pick up the passengers waiting in the current bus stop whose destination matches with passengers inside the bus
+      if (member? (item 1 ?) shortest_path)[
+        pick-up-passenger (item 0 ?)
+      ]
+    ]
+  ]
+  
+  
+  ; Priority 2: passengers with destination same as passengers inside
+  ; Get list of destinations of passengers inside the bus
+  let destinations []
+  foreach bus_passengers [ set destinations lput (item 1 ?) destinations ]
+  set destinations remove-duplicates destinations
+  
+  if not (length destinations = 0) [
+    foreach (get-passengers-at-stop current_stop)[
+      ; If the bus capacity is full don't pickup the passengers 
+      if not ((length bus_passengers) < capacity) [ stop ]
+      
+      ; Pick up the passengers waiting in the current bus stop whose destination matches with passengers inside the bus
+      if (member? (item 1 ?) destinations)[
+        pick-up-passenger (item 0 ?)
+      ]
+    ]
+  ]
+end
+
+to pickup-passengers-random
   ; Pick up the passengers waiting at the current bus stop
   
   ; Get list of destinations of passengers inside the bus
@@ -328,12 +363,17 @@ to pickup-passengers
   ]
   
   ; Priority 3
+  if length (get-passengers-at-stop current_stop) = 0 [stop]
+  let current_passengers matrix:from-column-list (get-passengers-at-stop current_stop)
+  let top_destinations modes (matrix:get-row current_passengers 1)
+  let destination item 0 top_destinations
+  
   foreach (get-passengers-at-stop current_stop)
   [
     ; If the bus capacity is full don't pickup the passengers 
     if not ((length bus_passengers) < capacity) [ stop ]
     
-    pick-up-passenger (item 0 ?)
+    if ((item 1 ?) = destination) [ pick-up-passenger (item 0 ?) ]
   ]
 end
 
