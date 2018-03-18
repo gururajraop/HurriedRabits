@@ -20,6 +20,7 @@ buses-own [
   vote
   unread
   prev-inbox-length
+  all-bus-stops
   
   ; Variables for coordination
   expected-replies
@@ -29,7 +30,11 @@ buses-own [
   destination-replies
   passenger-count-replies
   
-  ; Variables for shrtest path
+  ; Variables for competition
+  reward_points
+  bus_active
+  
+  ; Variables for shortest path
   strategy
   shortest_path
   
@@ -40,6 +45,7 @@ buses-own [
   report-passenger-count
   
   ; State variables
+  state-new-bus
   state-choose-stop
   state-ask-destinations
   state-wait-responses
@@ -75,6 +81,8 @@ to init-buses
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   
+  set all-bus-stops reverse n-values length amsterdam_bus_stops_names [23 - ?]
+
   set selected-stop -1
   ; Initialize communication protocol
   set ask-destination "ask-destination"
@@ -82,10 +90,14 @@ to init-buses
   set ask-passenger-count "ask-passenger-count"
   set report-passenger-count "report-passenger-count"
   
+  set reward_points 0
+  set bus_active true
+  
   set strategy "random"
   set shortest_path []
   
   ; Initialize state strings
+  set state-new-bus "state-new-bus"
   set state-choose-stop "state-choose-stop"
   set state-ask-destinations "state-ask-destinations"
   set state-wait-responses "state-wait-responses"
@@ -96,7 +108,8 @@ to init-buses
   set vote-wait-response "vote-wait-response"
   set vote-no-vote "no-vote"
   ; Initial state
-  set state state-choose-stop
+  set state state-new-bus
+
   set vote vote-no-vote
   ; Initialize unread messages
   set unread []
@@ -110,9 +123,16 @@ to init-buses
 end
 
 to execute-actions
+  ifelse bus_active [
+  ; If bus is new in the system, send it to bus stop with maximum amount of passengers waiting
+  if state = state-new-bus[
+    init-operating
+    set state state-move
+  ]
+
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
   if state = state-choose-stop [
-    ifelse strategy = "random" and (length bus_passengers) < (0.9 * capacity) [
+    ifelse strategy = "random" and (length bus_passengers) < (0.5 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
@@ -173,7 +193,75 @@ to execute-actions
   
   update-unread
   reply-unread
+  
+  if deactivate_bus [ set bus_active false ]
+]
+[
+  if (length bus_passengers > 0) [
+  if current_stop = selected-stop 
+  [
+    drop-passengers
+    set selected-stop -1
+  ]
+  ifelse (length bus_passengers > 0) [
+    if selected-stop = -1 [
+    let destination (item 1 item 0 bus_passengers)
+    choose-next-stop-by-shortest-path ]
+    travel-to selected-stop
+  ]
+  [ if current_stop = -1 [ travel-to next_stop ]]
+  ]
+  
+  if activate_bus [
+    set bus_active true
+    set state state-choose-stop
+    set strategy "random"
+  ]
+]
 end
+
+to-report deactivate_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23])) < 10
+  [
+    let score 0
+    let all_scores []
+    ask buses [set all_scores lput (reward_points / capacity) all_scores]
+    set score (reward_points / capacity)
+    if score = min(all_scores) [ report true ]
+  ]
+  report false
+end
+
+to-report activate_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23 and bus_active = true])) > 10
+  [
+    report true
+  ]
+  report false
+end
+
+to init-operating
+  ; Smoothed list of passengers waiting
+  let stops-weights map [(length ?) + 1] map get-passengers-at-stop all-bus-stops
+  ; Cumulative sum
+  let cum-sum butfirst reduce [lput (?2 + last ?1) ?1] fput [0] stops-weights
+  ; Choose index from uniform distribution
+  let choice-value random-float max cum-sum
+  ; Get corresponding stop
+  let selection-results map [? > choice-value] cum-sum
+  let selected-destination item (position true selection-results) all-bus-stops
+  
+  ifelse (member? selected-destination item current_stop graph) [set selected-stop selected-destination set strategy "random"]
+  [
+  ; Set shortest paths to that stop
+  set strategy "shortest_path"
+  set shortest_path get-shortest-path current_stop selected-destination    
+  ifelse length shortest_path > 1 [set selected-stop (item 1 shortest_path)]
+  [ set selected-stop -1 ]
+  ]
+end
+
+
 
 ; Choose the next stop based on the current passengers
 ; If there are no passengers or
@@ -205,16 +293,20 @@ to choose-next-stop-by-passengers
 end
 
 to choose-next-stop-by-shortest-path
-  ifelse length shortest_path = 0 [
+  if length shortest_path = 0 [
     let current_passengers matrix:from-column-list bus_passengers
     let destinations modes (matrix:get-row current_passengers 1)
-    let destination item 0 destinations
+    ;let destination item 0 destinations
+    let destination item 1 item 0 bus_passengers
     set shortest_path get-shortest-path current_stop destination
-    set selected-stop (item 1 shortest_path)
+    ; set selected-stop (item 1 shortest_path)
   ]
-  [
-    set selected-stop item ((position current_stop shortest_path) + 1) shortest_path
+  
+  ifelse length shortest_path = 1 [
+    set strategy "random"
+    set shortest_path []
   ]
+  [ set selected-stop item ((position current_stop shortest_path) + 1) shortest_path ]
   
   if (position selected-stop shortest_path) = (length shortest_path - 1) [
     set strategy "random"
@@ -290,6 +382,7 @@ to drop-passengers
    ; Drop the passenger if his/her destination is current bus stop
    if (item 1 ?) = current_stop [
      drop-off-passenger (item 0 ?)
+     set reward_points (reward_points + 1)
     ]
   ]
 end
@@ -452,7 +545,7 @@ to-report vote_for_new_bus
   if (count turtles with [who > 23]) = 2 [report 3]
 
   if vote = vote-no-vote [     
-    let ppb 100
+    let ppb 50
     if (count turtles with [who > 23]) > 10 [set ppb 250]
     if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [ set vote vote-add-bus ]
   ]
