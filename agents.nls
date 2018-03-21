@@ -136,7 +136,7 @@ to execute-actions
 
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
   if state = state-choose-stop [
-    ifelse strategy = "random" and (length bus_passengers) < (0.9 * capacity) [
+    ifelse strategy = "random" and (length bus_passengers) < (0.75 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       if selected-stop = -1 [
@@ -259,7 +259,7 @@ to init-operating
 end
 
 to-report deactivate_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23])) < 10
+  if (amount_passengers_waiting / (count buses)) < 10
   [
     let score 0
     let all_scores []
@@ -271,7 +271,7 @@ to-report deactivate_bus
 end
 
 to-report activate_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23 and not (state = state-inactive)])) > 10
+  if (amount_passengers_waiting / (count buses with [not (state = state-inactive)])) > 10
   [
     report true
   ]
@@ -554,13 +554,13 @@ to reply-unread
 end
 
 to-report vote_for_new_bus
-  if (count turtles with [who > 23]) = 1 [report 2]
-  if (count turtles with [who > 23]) = 2 [report 3]
+  if (count buses) = 1 [report 2]
+  if (count buses) = 2 [report 3]
 
   if vote = vote-no-vote [     
     let ppb 50
-    if (count turtles with [who > 23]) > 10 [set ppb 150]
-    if (amount_passengers_waiting / (count turtles with [who > 23])) > ppb [ set vote vote-add-bus ]
+    if (count buses) > 10 [set ppb 150]
+    if (amount_passengers_waiting / (count buses)) > ppb [ set vote vote-add-bus ]
   ]
   
   if vote = vote-add-bus [
