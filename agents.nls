@@ -32,7 +32,6 @@ buses-own [
   
   ; Variables for competition
   reward_points
-  bus_active
   
   ; Variables for shortest path
   strategy
@@ -52,6 +51,8 @@ buses-own [
   state-pickup
   state-move
   state-drop
+  state-inactive
+  
   vote-add-bus
   vote-wait-response
   vote-no-vote
@@ -91,8 +92,6 @@ to init-buses
   set report-passenger-count "report-passenger-count"
   
   set reward_points 0
-  set bus_active true
-  
   set strategy "random"
   set shortest_path []
   
@@ -104,13 +103,18 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
+  set state-inactive "state-inactive"
+  
+  ; Initialize voting strings
   set vote-add-bus "vote-add-bus"
   set vote-wait-response "vote-wait-response"
   set vote-no-vote "no-vote"
+  
   ; Initial state
   set state state-new-bus
-
+  ; Initial voting scheme
   set vote vote-no-vote
+  
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
@@ -123,7 +127,7 @@ to init-buses
 end
 
 to execute-actions
-  ifelse bus_active [
+
   ; If bus is new in the system, send it to bus stop with maximum amount of passengers waiting
   if state = state-new-bus[
     init-operating
@@ -135,7 +139,14 @@ to execute-actions
     ifelse strategy = "random" and (length bus_passengers) < (0.5 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
-      ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
+      if selected-stop = -1 [
+        ifelse length bus_passengers > 1 [
+          set strategy "shortest_path"
+          choose-next-stop-by-shortest-path
+        ]
+        [ init-operating ]
+      ]
+      set state state-pickup
     ]
     [
       if strategy = "random" [ set strategy "shortest_path" ]
@@ -182,7 +193,9 @@ to execute-actions
   ; At destination, drop off passengers and change to state-choose-stop
   if state = state-drop [
     drop-passengers
-    set state state-choose-stop
+  
+    ifelse deactivate_bus [ set state state-inactive ]
+    [ set state state-choose-stop ]
   ]
   
   ; Add busses if needed
@@ -194,30 +207,29 @@ to execute-actions
   update-unread
   reply-unread
   
-  if deactivate_bus [ set bus_active false ]
-]
-[
-  if (length bus_passengers > 0) [
-  if current_stop = selected-stop 
-  [
-    drop-passengers
-    set selected-stop -1
+  if state = state-inactive [
+    show (word "Entered inactive state")
+    if (length bus_passengers > 0) [
+      if current_stop = selected-stop 
+      [
+        drop-passengers
+        set selected-stop -1
+      ]
+      ifelse (length bus_passengers > 0) [
+        if selected-stop = -1 [
+          let destination (item 1 item 0 bus_passengers)
+          choose-next-stop-by-shortest-path ]
+        travel-to selected-stop
+      ]
+      [ if current_stop = -1 [ travel-to next_stop ]]
+    ]
+    
+    if activate_bus [
+      show (word "Reactivating again")
+      ifelse current_stop = -1 [set state state-move]
+      [ set state state-choose-stop ]
+    ]
   ]
-  ifelse (length bus_passengers > 0) [
-    if selected-stop = -1 [
-    let destination (item 1 item 0 bus_passengers)
-    choose-next-stop-by-shortest-path ]
-    travel-to selected-stop
-  ]
-  [ if current_stop = -1 [ travel-to next_stop ]]
-  ]
-  
-  if activate_bus [
-    set bus_active true
-    set state state-choose-stop
-    set strategy "random"
-  ]
-]
 end
 
 to-report deactivate_bus
@@ -233,7 +245,7 @@ to-report deactivate_bus
 end
 
 to-report activate_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23 and bus_active = true])) > 10
+  if (amount_passengers_waiting / (count turtles with [who > 23 and not (state = state-inactive)])) > 10
   [
     report true
   ]
@@ -269,7 +281,7 @@ end
 ; no choice can be made with strategy 1 so don't modify selected-stop
 to choose-next-stop-by-passengers
   if length bus_passengers > 0 [
-    ; Get adjacent bus stops 
+    ; Get adjacent bus stops
     let adjacent-stops  item current_stop graph
     ; Initialize with 0 number of passengers going to those stops
     let destination-counts n-values (length adjacent-stops) [0]
