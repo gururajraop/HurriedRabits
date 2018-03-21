@@ -30,10 +30,7 @@ buses-own [
   destination-replies
   passenger-count-replies
   
-  ; Variables for competition
-  reward_points
-  
-  ; Variables for shortest path
+  ; Variables for shrtest path
   strategy
   shortest_path
   
@@ -51,8 +48,6 @@ buses-own [
   state-pickup
   state-move
   state-drop
-  state-inactive
-  
   vote-add-bus
   vote-wait-response
   vote-no-vote
@@ -91,7 +86,6 @@ to init-buses
   set ask-passenger-count "ask-passenger-count"
   set report-passenger-count "report-passenger-count"
   
-  set reward_points 0
   set strategy "random"
   set shortest_path []
   
@@ -103,18 +97,13 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
-  set state-inactive "state-inactive"
-  
-  ; Initialize voting strings
   set vote-add-bus "vote-add-bus"
   set vote-wait-response "vote-wait-response"
   set vote-no-vote "no-vote"
-  
   ; Initial state
   set state state-new-bus
-  ; Initial voting scheme
+
   set vote vote-no-vote
-  
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
@@ -127,7 +116,6 @@ to init-buses
 end
 
 to execute-actions
-
   ; If bus is new in the system, send it to bus stop with maximum amount of passengers waiting
   if state = state-new-bus[
     init-operating
@@ -139,14 +127,7 @@ to execute-actions
     ifelse strategy = "random" and (length bus_passengers) < (0.5 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
-      if selected-stop = -1 [
-        ifelse length bus_passengers > 1 [
-          set strategy "shortest_path"
-          choose-next-stop-by-shortest-path
-        ]
-        [ init-operating ]
-      ]
-      set state state-pickup
+      ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
     ]
     [
       if strategy = "random" [ set strategy "shortest_path" ]
@@ -193,9 +174,7 @@ to execute-actions
   ; At destination, drop off passengers and change to state-choose-stop
   if state = state-drop [
     drop-passengers
-  
-    ifelse deactivate_bus [ set state state-inactive ]
-    [ set state state-choose-stop ]
+    set state state-choose-stop
   ]
   
   ; Add busses if needed
@@ -206,51 +185,8 @@ to execute-actions
   
   update-unread
   reply-unread
-  
-  if state = state-inactive [
-    show (word "Entered inactive state")
-    if (length bus_passengers > 0) [
-      if current_stop = selected-stop 
-      [
-        drop-passengers
-        set selected-stop -1
-      ]
-      ifelse (length bus_passengers > 0) [
-        if selected-stop = -1 [
-          let destination (item 1 item 0 bus_passengers)
-          choose-next-stop-by-shortest-path ]
-        travel-to selected-stop
-      ]
-      [ if current_stop = -1 [ travel-to next_stop ]]
-    ]
-    
-    if activate_bus [
-      show (word "Reactivating again")
-      ifelse current_stop = -1 [set state state-move]
-      [ set state state-choose-stop ]
-    ]
-  ]
 end
 
-to-report deactivate_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23])) < 10
-  [
-    let score 0
-    let all_scores []
-    ask buses [set all_scores lput (reward_points / capacity) all_scores]
-    set score (reward_points / capacity)
-    if score = min(all_scores) [ report true ]
-  ]
-  report false
-end
-
-to-report activate_bus
-  if (amount_passengers_waiting / (count turtles with [who > 23 and not (state = state-inactive)])) > 10
-  [
-    report true
-  ]
-  report false
-end
 
 to init-operating
   ; Smoothed list of passengers waiting
@@ -268,8 +204,7 @@ to init-operating
   ; Set shortest paths to that stop
   set strategy "shortest_path"
   set shortest_path get-shortest-path current_stop selected-destination    
-  ifelse length shortest_path > 1 [set selected-stop (item 1 shortest_path)]
-  [ set selected-stop -1 ]
+  set selected-stop (item 1 shortest_path)
   ]
 end
 
@@ -281,7 +216,7 @@ end
 ; no choice can be made with strategy 1 so don't modify selected-stop
 to choose-next-stop-by-passengers
   if length bus_passengers > 0 [
-    ; Get adjacent bus stops
+    ; Get adjacent bus stops 
     let adjacent-stops  item current_stop graph
     ; Initialize with 0 number of passengers going to those stops
     let destination-counts n-values (length adjacent-stops) [0]
@@ -305,20 +240,17 @@ to choose-next-stop-by-passengers
 end
 
 to choose-next-stop-by-shortest-path
-  if length shortest_path = 0 [
+  ifelse length shortest_path = 0 [
     let current_passengers matrix:from-column-list bus_passengers
     let destinations modes (matrix:get-row current_passengers 1)
     ;let destination item 0 destinations
     let destination item 1 item 0 bus_passengers
     set shortest_path get-shortest-path current_stop destination
-    ; set selected-stop (item 1 shortest_path)
+    set selected-stop (item 1 shortest_path)
   ]
-  
-  ifelse length shortest_path = 1 [
-    set strategy "random"
-    set shortest_path []
+  [
+    set selected-stop item ((position current_stop shortest_path) + 1) shortest_path
   ]
-  [ set selected-stop item ((position current_stop shortest_path) + 1) shortest_path ]
   
   if (position selected-stop shortest_path) = (length shortest_path - 1) [
     set strategy "random"
@@ -394,7 +326,6 @@ to drop-passengers
    ; Drop the passenger if his/her destination is current bus stop
    if (item 1 ?) = current_stop [
      drop-off-passenger (item 0 ?)
-     set reward_points (reward_points + 1)
     ]
   ]
 end
