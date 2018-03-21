@@ -127,7 +127,14 @@ to execute-actions
     ifelse strategy = "random" and (length bus_passengers) < (0.5 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
-      ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
+      if selected-stop = -1 [
+        ifelse length bus_passengers > 1 [
+          set strategy "shortest_path"
+          choose-next-stop-by-shortest-path
+        ]
+        [ init-operating ]
+      ]
+      set state state-pickup
     ]
     [
       if strategy = "random" [ set strategy "shortest_path" ]
@@ -189,15 +196,18 @@ end
 
 
 to init-operating
+  ; Get list of all bus stops except the current bus stop
+  let other-bus-stops remove current_stop all-bus-stops
+  
   ; Smoothed list of passengers waiting
-  let stops-weights map [(length ?) + 1] map get-passengers-at-stop all-bus-stops
+  let stops-weights map [(length ?) + 1] map get-passengers-at-stop other-bus-stops
   ; Cumulative sum
   let cum-sum butfirst reduce [lput (?2 + last ?1) ?1] fput [0] stops-weights
   ; Choose index from uniform distribution
   let choice-value random-float max cum-sum
   ; Get corresponding stop
   let selection-results map [? > choice-value] cum-sum
-  let selected-destination item (position true selection-results) all-bus-stops
+  let selected-destination item (position true selection-results) other-bus-stops
   
   ifelse (member? selected-destination item current_stop graph) [set selected-stop selected-destination set strategy "random"]
   [
@@ -456,8 +466,8 @@ to reply-unread
       set add-bus-fact (add-bus-fact / 2)
       
       let new-bus 1
-      if add-bus-fact > 0.3 [ set new-bus 2 ]
-      if add-bus-fact > 0.6 [ set new-bus 3 ]
+      if add-bus-fact > 0.2 [ set new-bus 2 ]
+      if add-bus-fact > 0.5 [ set new-bus 3 ]
       
       send-message sender (word report-passenger-count new-bus)
       set replied "Yes"
