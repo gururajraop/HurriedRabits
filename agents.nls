@@ -30,6 +30,9 @@ buses-own [
   destination-replies
   passenger-count-replies
   
+  ; Variables for competition
+  reward_points
+  
   ; Variables for shrtest path
   strategy
   shortest_path
@@ -48,6 +51,9 @@ buses-own [
   state-pickup
   state-move
   state-drop
+  state-inactive
+  
+  ; Voting scheme variables
   vote-add-bus
   vote-wait-response
   vote-no-vote
@@ -86,6 +92,7 @@ to init-buses
   set ask-passenger-count "ask-passenger-count"
   set report-passenger-count "report-passenger-count"
   
+  set reward_points 0
   set strategy "random"
   set shortest_path []
   
@@ -97,13 +104,18 @@ to init-buses
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
+  set state-inactive "state-inactive"
+  
+  ; Initialize voting scheme strings
   set vote-add-bus "vote-add-bus"
   set vote-wait-response "vote-wait-response"
   set vote-no-vote "no-vote"
+  
   ; Initial state
   set state state-new-bus
-
+  ; Initial voting scheme
   set vote vote-no-vote
+  
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
@@ -181,7 +193,9 @@ to execute-actions
   ; At destination, drop off passengers and change to state-choose-stop
   if state = state-drop [
     drop-passengers
-    set state state-choose-stop
+  
+    ifelse deactivate_bus [ set state state-inactive ]
+    [ set state state-choose-stop ]
   ]
   
   ; Add busses if needed
@@ -192,6 +206,31 @@ to execute-actions
   
   update-unread
   reply-unread
+  
+  if state = state-inactive [
+    if (length bus_passengers > 0) [
+      ifelse selected-stop = -1 [
+        choose-next-stop-by-shortest-path
+        travel-to selected-stop
+      ]
+      [
+        ifelse current_stop = selected-stop 
+        [
+          drop-passengers
+          if (length bus_passengers > 0) [
+            choose-next-stop-by-shortest-path
+            travel-to selected-stop
+          ]
+        ]
+        [ travel-to selected-stop ]
+      ]
+    ]
+    
+    if activate_bus [
+      ifelse current_stop = -1 [set state state-move]
+      [ set state state-choose-stop ]
+    ]
+  ]
 end
 
 
@@ -218,6 +257,25 @@ to init-operating
   ]
 end
 
+to-report deactivate_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23])) < 10
+  [
+    let score 0
+    let all_scores []
+    ask buses [set all_scores lput (reward_points / capacity) all_scores]
+    set score (reward_points / capacity)
+    if score = min(all_scores) [ report true ]
+  ]
+  report false
+end
+
+to-report activate_bus
+  if (amount_passengers_waiting / (count turtles with [who > 23 and not (state = state-inactive)])) > 10
+  [
+    report true
+  ]
+  report false
+end
 
 
 ; Choose the next stop based on the current passengers
@@ -336,6 +394,7 @@ to drop-passengers
    ; Drop the passenger if his/her destination is current bus stop
    if (item 1 ?) = current_stop [
      drop-off-passenger (item 0 ?)
+     set reward_points (reward_points + 1)
     ]
   ]
 end
