@@ -136,12 +136,12 @@ to execute-actions
 
   ; Next-stop strategy 1: attempt to choose stop based on current passengers
   if state = state-choose-stop [
-    ifelse strategy = "random" and (length bus_passengers) < (0.75 * capacity) [
+    ifelse strategy = "random" and (length bus_passengers) < (0.9 * capacity) [
       choose-next-stop-by-passengers
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       if selected-stop = -1 [
         ; ifelse length bus_passengers > 1 [
-        ifelse (length bus_passengers) > (0.5 * capacity) [
+        ifelse (length bus_passengers) > (0.3 * capacity) [
           set strategy "shortest_path"
           choose-next-stop-by-shortest-path
         ]
@@ -541,8 +541,8 @@ to reply-unread
       set add-bus-fact (add-bus-fact / 2)
       
       let new-bus 1
-      if add-bus-fact > 0.15 [ set new-bus 2 ]
-      if add-bus-fact > 0.45 [ set new-bus 3 ]
+      if add-bus-fact > 0.25 [ set new-bus 2 ]
+      if add-bus-fact > 0.5 [ set new-bus 3 ]
       
       send-message sender (word report-passenger-count new-bus)
       set replied "Yes"
@@ -574,7 +574,7 @@ to-report vote_for_new_bus
 
   if vote = vote-no-vote [     
     let ppb 50
-    if (count buses) > 10 [set ppb 150]
+    if (count buses) > 10 [set ppb 200]
     if (amount_passengers_waiting / (count buses)) > ppb [ set vote vote-add-bus ]
   ]
   
