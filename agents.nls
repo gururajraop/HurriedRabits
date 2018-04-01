@@ -17,14 +17,20 @@ buses-own [
   capacity
   selected-stop
   state
+<<<<<<< HEAD
   vote
   unread
   prev-inbox-length
   all-bus-stops
+=======
+  unread
+  prev-inbox-length
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   
   ; Variables for coordination
   expected-replies
   received-replies
+<<<<<<< HEAD
   expected-votes
   received-votes
   destination-replies
@@ -36,27 +42,38 @@ buses-own [
   ; Variables for shrtest path
   strategy
   shortest_path
+=======
+  destination-replies
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   
   ; Communication protocol
   ask-destination
   report-destination
+<<<<<<< HEAD
   ask-passenger-count
   report-passenger-count
   
   ; State variables
   state-new-bus
+=======
+  
+  ; State variables
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   state-choose-stop
   state-ask-destinations
   state-wait-responses
   state-pickup
   state-move
   state-drop
+<<<<<<< HEAD
   state-inactive
   
   ; Voting scheme variables
   vote-add-bus
   vote-wait-response
   vote-no-vote
+=======
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
 ]
  
 globals [
@@ -83,12 +100,16 @@ to init-buses
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   
+<<<<<<< HEAD
   set all-bus-stops reverse n-values length amsterdam_bus_stops_names [23 - ?]
 
+=======
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   set selected-stop -1
   ; Initialize communication protocol
   set ask-destination "ask-destination"
   set report-destination "report-destination"
+<<<<<<< HEAD
   set ask-passenger-count "ask-passenger-count"
   set report-passenger-count "report-passenger-count"
   
@@ -98,12 +119,17 @@ to init-buses
   
   ; Initialize state strings
   set state-new-bus "state-new-bus"
+=======
+  
+  ; Initialize state strings
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   set state-choose-stop "state-choose-stop"
   set state-ask-destinations "state-ask-destinations"
   set state-wait-responses "state-wait-responses"
   set state-pickup "state-pickup"
   set state-move "state-move"
   set state-drop "state-drop"
+<<<<<<< HEAD
   set state-inactive "state-inactive"
   
   ; Initialize voting scheme strings
@@ -116,11 +142,16 @@ to init-buses
   ; Initial voting scheme
   set vote vote-no-vote
   
+=======
+  ; Initial state
+  set state state-choose-stop
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ; Initialize unread messages
   set unread []
   set prev-inbox-length 0
   set expected-replies 0
   set received-replies 0
+<<<<<<< HEAD
   set expected-votes 0
   set received-votes 0
   set destination-replies []
@@ -157,6 +188,17 @@ to execute-actions
       ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
       ;ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
     ]
+=======
+  set destination-replies []
+end
+
+to execute-actions
+  ; Next-stop strategy 1: attempt to choose stop based on current passengers
+  if state = state-choose-stop [    
+    choose-next-stop-by-passengers
+    ; If a choice was made, start picking up passengers, otherwise choose with strategy 2
+    ifelse selected-stop = -1 [set state state-ask-destinations][set state state-pickup]
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ]
   
   ; Next-stop strategy 2: choose adjacent stop with maximum passengers waiting
@@ -177,6 +219,7 @@ to execute-actions
   
   ; Once a stop has been chosen, pick up passengers
   if state = state-pickup [
+<<<<<<< HEAD
     ifelse strategy = "random" [ pickup-passengers-random ]
     [ pickup-passengers-shortest-path ]
     set state state-move
@@ -203,10 +246,29 @@ to execute-actions
   if bus_id = 24 [
     let add-new-bus vote_for_new_bus
     if not (add-new-bus = -1) [ add-bus add-new-bus ]
+=======
+    pickup-passengers
+    set state state-move
+  ]
+  
+  ; Keep moving until you get there!
+  if state = state-move [
+    ifelse current_stop = selected-stop [
+      ; When the bus arrives, reset selected-stop and change to state-choose-stop
+      set selected-stop -1
+      set state state-choose-stop
+    ][travel-to selected-stop]
+  ]
+  
+  ; Add busses if needed
+  if bus_id = 24 [
+    if vote_for_new_bus [add-bus (one-of [1 2 3])]
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ]
   
   update-unread
   reply-unread
+<<<<<<< HEAD
   
   if state = state-inactive [
     if (length bus_passengers > 0) [
@@ -279,6 +341,10 @@ to-report activate_bus
 end
 
 
+=======
+end
+
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
 ; Choose the next stop based on the current passengers
 ; If there are no passengers or
 ; if no passenger is going to an adjacent stop
@@ -308,6 +374,7 @@ to choose-next-stop-by-passengers
   ]
 end
 
+<<<<<<< HEAD
 to choose-next-stop-by-shortest-path
   ifelse length shortest_path = 0 [
     let current_passengers matrix:from-column-list bus_passengers
@@ -342,6 +409,8 @@ to choose-next-stop-by-shortest-path
   ]
 end
 
+=======
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
 ; Send messages to other buses
 ; asking for their destinations
 to ask-destinations
@@ -355,6 +424,7 @@ to ask-destinations
   set destination-replies []
 end
 
+<<<<<<< HEAD
 to ask-passenger-counts
   let other-buses [bus_id] of other buses
   foreach other-buses [
@@ -404,12 +474,32 @@ to choose-next-stop-by-nearby
 end
 
 to drop-passengers
+=======
+to choose-next-stop-by-nearby  
+  ; Get adjacent bus stops and sort by number of passengers waiting
+  let sorted-adjacent-stops sort-by [length get-passengers-at-stop ?1 > length get-passengers-at-stop ?2] (item current_stop graph)
+  
+  ; filter out stops to which other buses are going
+  foreach sorted-adjacent-stops [
+    if not member? ? destination-replies [
+      set selected-stop ?
+      stop
+    ]
+  ]
+  ; If all stops are filtered out, choose the one with
+  ; maximum number of passengers waiting
+  set selected-stop item 0 sorted-adjacent-stops
+end
+
+to drop_passengers
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ; For every passenger currently in the bus
   foreach bus_passengers
   [
    ; Drop the passenger if his/her destination is current bus stop
    if (item 1 ?) = current_stop [
      drop-off-passenger (item 0 ?)
+<<<<<<< HEAD
      set reward_points (reward_points + 1)
     ]
   ]
@@ -445,11 +535,17 @@ to pickup-passengers-shortest-path
       if (member? (item 1 ?) destinations)[
         pick-up-passenger (item 0 ?)
       ]
+=======
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
     ]
   ]
 end
 
+<<<<<<< HEAD
 to pickup-passengers-random
+=======
+to pickup-passengers
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ; Pick up the passengers waiting at the current bus stop
   
   ; Get list of destinations of passengers inside the bus
@@ -459,6 +555,7 @@ to pickup-passengers-random
   
   ; Priority 1 : Passengers inside the bus
   if not (length destinations = 0) [
+<<<<<<< HEAD
     foreach (get-passengers-at-stop current_stop)[
       ; If the bus capacity is full don't pickup the passengers 
       if not ((length bus_passengers) < capacity) [ stop ]
@@ -471,6 +568,21 @@ to pickup-passengers-random
   ]
   
   ; Priority 2 : Passengers at the current bus stop
+=======
+  foreach (get-passengers-at-stop current_stop)
+  [
+    ; If the bus capacity is full don't pickup the passengers 
+    if not ((length bus_passengers) < capacity) [ stop ]
+    
+    ; Pick up the passengers waiting in the current bus stop whose destination matches with passengers inside the bus
+    if (member? (item 1 ?) destinations)
+    [
+      pick-up-passenger (item 0 ?)
+    ]
+  ] ]
+  
+  ; Priority 2
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   foreach (get-passengers-at-stop current_stop)
   [
     ; If the bus capacity is full don't pickup the passengers 
@@ -484,17 +596,24 @@ to pickup-passengers-random
   ]
   
   ; Priority 3
+<<<<<<< HEAD
   if length (get-passengers-at-stop current_stop) = 0 [stop]
   let current_passengers matrix:from-column-list (get-passengers-at-stop current_stop)
   let top_destinations modes (matrix:get-row current_passengers 1)
   let destination item 0 top_destinations
   
+=======
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   foreach (get-passengers-at-stop current_stop)
   [
     ; If the bus capacity is full don't pickup the passengers 
     if not ((length bus_passengers) < capacity) [ stop ]
     
+<<<<<<< HEAD
     if ((item 1 ?) = destination) [ pick-up-passenger (item 0 ?) ]
+=======
+    pick-up-passenger (item 0 ?)
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ]
 end
 
@@ -524,6 +643,7 @@ to reply-unread
   foreach unread [
     let message item 2 ?
     let sender item 1 ?
+<<<<<<< HEAD
     let replied "No"
     
     if message = ask-destination [
@@ -564,11 +684,27 @@ to reply-unread
     if replied = "No" [
       set not-replied lput ? not-replied
     ]
+=======
+    
+    ifelse message = ask-destination [
+      ; Reply to messages asking for destination
+      send-message sender (word report-destination next_stop)
+    ]
+    [ifelse (substring message 0 (length report-destination)) = report-destination [
+        let reported-destination read-from-string (substring message (length report-destination) (length message))
+        set destination-replies lput reported-destination destination-replies
+        set received-replies (received-replies + 1)
+    ]
+    [
+      set not-replied lput ? not-replied
+    ]]
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
   ]
   set unread not-replied
 end
 
 to-report vote_for_new_bus
+<<<<<<< HEAD
   if (count buses) = 1 [report 2]
   if (count buses) = 2 [report 3]
 
@@ -612,3 +748,8 @@ to-report get-shortest-path [source destination]
   
   report shortest_route
 end
+=======
+  if (amount_passengers_waiting / (count turtles with [who > 23])) > 1000 [report true]
+  report false
+end
+>>>>>>> 76c705dcb380130a17e69e67c0420955114e9ab6
