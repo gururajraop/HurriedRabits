@@ -194,9 +194,7 @@ to execute-actions
   ; At destination, drop off passengers and change to state-choose-stop
   if state = state-drop [
     drop-passengers
-  
-    ifelse deactivate_bus [ set state state-inactive ]
-    [ set state state-choose-stop ]
+    set state state-choose-stop
   ]
   
   ; Add busses if needed
@@ -208,30 +206,7 @@ to execute-actions
   update-unread
   reply-unread
   
-  if state = state-inactive [
-    if (length bus_passengers > 0) [
-      ifelse selected-stop = -1 [
-        choose-next-stop-by-shortest-path
-        travel-to selected-stop
-      ]
-      [
-        ifelse current_stop = selected-stop 
-        [
-          drop-passengers
-          if (length bus_passengers > 0) [
-            choose-next-stop-by-shortest-path
-            travel-to selected-stop
-          ]
-        ]
-        [ travel-to selected-stop ]
-      ]
-    ]
-    
-    if activate_bus [
-      ifelse current_stop = -1 [set state state-move]
-      [ set state state-choose-stop ]
-    ]
-  ]
+
 end
 
 
@@ -257,27 +232,6 @@ to init-operating
   set selected-stop (item 1 shortest_path)
   ]
 end
-
-to-report deactivate_bus
-  if (amount_passengers_waiting / (count buses)) < 10
-  [
-    let score 0
-    let all_scores []
-    ask buses [set all_scores lput (reward_points / capacity) all_scores]
-    set score (reward_points / capacity)
-    if score = min(all_scores) [ report true ]
-  ]
-  report false
-end
-
-to-report activate_bus
-  if (amount_passengers_waiting / (count buses with [not (state = state-inactive)])) > 10
-  [
-    report true
-  ]
-  report false
-end
-
 
 ; Choose the next stop based on the current passengers
 ; If there are no passengers or
@@ -315,25 +269,25 @@ to choose-next-stop-by-shortest-path
     let destination item 0 destinations
     if (random-float 1) > 0.5 [ set destination item 1 item 0 bus_passengers ]
     set shortest_path get-shortest-path current_stop destination
-    set selected-stop (item 1 shortest_path)
-  ]
-  [
- ifelse member? current_stop shortest_path 
-    [
-     let next_index ((position current_stop shortest_path) + 1) 
-    ifelse (next_index < length shortest_path)[
-    set selected-stop item next_index shortest_path
-    ] 
-      [
+    ifelse length shortest_path > 1 [
+      set selected-stop (item 1 shortest_path)
+    ][
       set strategy "random"
       set shortest_path []
     ]
+  ][
+    ifelse member? current_stop shortest_path[
+      let next_index ((position current_stop shortest_path) + 1) 
+      ifelse (next_index < length shortest_path)[
+        set selected-stop item next_index shortest_path
+      ][
+        set strategy "random"
+        set shortest_path []
       ]
-    [
-       set strategy "random"
+    ][
+      set strategy "random"
       set shortest_path []      
-      ]
-  
+    ]
   ]
   
   if (position selected-stop shortest_path) = (length shortest_path - 1) [
